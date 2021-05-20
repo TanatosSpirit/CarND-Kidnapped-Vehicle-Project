@@ -118,7 +118,36 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   and the following is a good resource for the actual equation to implement
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
+    for(auto particle: particles)
+    {
+        // Transformation of observations into map coordinates given the position of the particle
+        vector<LandmarkObs> obs_transformed;
 
+        for (auto observation:observations)
+        {
+            LandmarkObs obs;
+            obs.x = particle.x + (cos(particle.theta) * observation.x) - (sin(particle.theta) * observation.y);
+            obs.y = particle.y + (sin(particle.theta) * observation.x) + (cos(particle.theta) * observation.y);
+
+            obs_transformed.push_back(obs);
+        }
+
+        // Association each transformed observation with a landmark identifier
+        for (auto observation:obs_transformed) {
+            double min_distance = std::numeric_limits<double>::max();
+            for (auto landmark:map_landmarks.landmark_list)
+            {
+                if(dist(particle.x, particle.y, landmark.x_f, landmark.y_f) <= sensor_range)
+                {
+                    double distance = dist(observation.x, observation.y, landmark.x_f, landmark.y_f);
+                    if(distance < min_distance){
+                        observation.id = landmark.id_i;
+                        min_distance = distance;
+                    }
+                }
+            }
+        }
+    }
 }
 
 void ParticleFilter::resample() {
