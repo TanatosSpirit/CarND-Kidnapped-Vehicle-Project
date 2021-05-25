@@ -118,7 +118,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   and the following is a good resource for the actual equation to implement
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
-    for(auto particle: particles)
+    for(auto &particle: particles)
     {
         // Transformation of observations into map coordinates given the position of the particle
         vector<LandmarkObs> obs_transformed;
@@ -133,6 +133,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         }
 
         // Association each transformed observation with a landmark identifier
+        particle.associations.clear();
+        particle.sense_x.clear();
+        particle.sense_y.clear();
         for (auto observation:obs_transformed) {
             double min_distance = std::numeric_limits<double>::max();
             for (auto landmark:map_landmarks.landmark_list)
@@ -146,7 +149,29 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                     }
                 }
             }
+            particle.associations.push_back(observation.id);
+            particle.sense_x.push_back(observation.x);
+            particle.sense_y.push_back(observation.y);
         }
+
+        // Calculating the Particle's Final Weight
+        std::cout << "Starting Particle Weight: " << particle.weight << std::endl;
+
+        for (int i = 0; i < particle.associations.size(); ++i) {
+            int landmark_id = particle.associations[i];
+
+            double obs_x = particle.sense_x[i];
+            double obs_y = particle.sense_y[i];
+
+            double landmark_x = map_landmarks.landmark_list[landmark_id - 1].x_f;
+            double landmark_y = map_landmarks.landmark_list[landmark_id - 1].y_f;
+
+            double sig_x = std_landmark[0];
+            double sig_y = std_landmark[1];
+            particle.weight *= multiv_prob(sig_x, sig_y, obs_x, obs_y, landmark_x, landmark_y);
+            std::cout << "Particle Weight in process: " << particle.weight << std::endl;
+        }
+
     }
 }
 
