@@ -182,6 +182,27 @@ void ParticleFilter::resample() {
    * NOTE: You may find std::discrete_distribution helpful here.
    *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
    */
+   // find the particles max weight
+    double max_weight = std::numeric_limits<double>::min();
+    for (auto particle:particles) {
+        if(particle.weight > max_weight) {
+            max_weight = particle.weight;
+        }
+    }
+
+    int index = rand() % num_particles;
+    double beta = 0.0;
+
+    // Seed with a real random value, if available
+    std::random_device r;
+
+    std::default_random_engine gen(r());
+
+    std::uniform_real_distribution<double> uni_rand(0, 1);
+
+    for(int i = 0; i < 10; ++i){
+        std::cout << uni_rand(gen) << std::endl;
+    }
 
 }
 
