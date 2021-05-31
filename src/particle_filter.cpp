@@ -76,7 +76,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
         double y_new;
         double theta_new;
 
-        if(fabs(yaw_rate) < 0.0001)
+        if(fabs(yaw_rate) < 1e-4)
         {
              x_new = x_0 + velocity * delta_t * cos(theta_0);
              y_new = y_0 + velocity * delta_t * sin(theta_0);
@@ -135,40 +135,42 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     double weight_norm{0.0};
     weights.clear();
 
-    for(int i = 0; i < particles.size(); ++i)
+    double sig_x = std_landmark[0];
+    double sig_y = std_landmark[1];
+
+    // calculate normalization term
+    double gauss_norm;
+    gauss_norm = 1 / (2 * M_PI * sig_x * sig_y);
+
+    for(auto &particle:particles)
     {
         // Transformation of observations into map coordinates given the position of the particle
         vector<LandmarkObs> obs_transformed;
-        vector<double> distances_to_landmark;
-        vector<double> obs_to_landmark;
 
-        double particle_x = particles[i].x;
-        double particle_y = particles[i].y;
-        double particle_theta = particles[i].theta;
-
+//        double particle_x = particles[i].x;
+//        double particle_y = particles[i].y;
+//        double particle_theta = particles[i].theta;
 
         for (auto observation:observations)
         {
             LandmarkObs obs;
             obs.id = 0;
-            obs.x = particle_x + (cos(particle_theta) * observation.x) - (sin(particle_theta) * observation.y);
-            obs.y = particle_y + (sin(particle_theta) * observation.x) + (cos(particle_theta) * observation.y);
+            obs.x = particle.x + (cos(particle.theta) * observation.x) - (sin(particle.theta) * observation.y);
+            obs.y = particle.y + (sin(particle.theta) * observation.x) + (cos(particle.theta) * observation.y);
 
             obs_transformed.push_back(obs);
         }
 
         // Association each transformed observation with a landmark identifier
-        particles[i].associations.clear();
-        particles[i].sense_x.clear();
-        particles[i].sense_y.clear();
+        particle.associations.clear();
+        particle.sense_x.clear();
+        particle.sense_y.clear();
 
         for (auto &observation:obs_transformed) {
             double min_distance = std::numeric_limits<double>::max();
-            double dist_particle_to_landmark = 0;
             for (auto &landmark:map_landmarks.landmark_list)
             {
-                dist_particle_to_landmark = dist(particle_x, particle_y, landmark.x_f, landmark.y_f);
-                if( dist_particle_to_landmark <= sensor_range)
+                if( dist(particle.x, particle.y, landmark.x_f, landmark.y_f) <= sensor_range)
                 {
                     double distance = dist(observation.x, observation.y, landmark.x_f, landmark.y_f);
                     if(distance < min_distance){
@@ -177,32 +179,23 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                     }
                 }
             }
-            obs_to_landmark.push_back(min_distance);
-            distances_to_landmark.push_back(dist_particle_to_landmark);
 
-            particles[i].associations.push_back(observation.id);
-            particles[i].sense_x.push_back(observation.x);
-            particles[i].sense_y.push_back(observation.y);
+            particle.associations.push_back(observation.id);
+            particle.sense_x.push_back(observation.x);
+            particle.sense_y.push_back(observation.y);
 
         }
 
         // Calculating the Particle's Final Weight
-        for (int j = 0; j < particles[i].associations.size(); ++j) {
+        for (int j = 0; j < particle.associations.size(); ++j) {
 
-            int landmark_id = particles[i].associations[j] - 1;
+            int landmark_id = particle.associations[j] - 1;
 
-            double obs_x = particles[i].sense_x[j];
-            double  obs_y = particles[i].sense_y[j];
+            double obs_x = particle.sense_x[j];
+            double  obs_y = particle.sense_y[j];
 
             double landmark_x = map_landmarks.landmark_list[landmark_id].x_f;
             double landmark_y = map_landmarks.landmark_list[landmark_id].y_f;
-
-            double sig_x = std_landmark[0];
-            double sig_y = std_landmark[1];
-
-            // calculate normalization term
-            double gauss_norm;
-            gauss_norm = 1 / (2 * M_PI * sig_x * sig_y);
 
             // calculate exponent
             double exponent;
@@ -212,19 +205,17 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             exponent = (pow(x_diff, 2) / (2 * pow(sig_x, 2)))
                        + (pow(y_diff, 2) / (2 * pow(sig_y, 2)));
 
-
             // calculate weight using normalization terms and exponent
             double weight = gauss_norm * exp(-exponent);
 
             if (weight == 0) {
-                particles[i].weight *= 1e-6;
+                particle.weight *= 1e-6;
             } else {
-                particles[i].weight *= weight;
+                particle.weight *= weight;
             }
-
         }
-        weight_norm += particles[i].weight;
-        weights.push_back(particles[i].weight);
+        weight_norm += particle.weight;
+        weights.push_back(particle.weight);
     }
 
     for (auto &particle:particles) {
@@ -247,7 +238,6 @@ void ParticleFilter::resample() {
 
     // create a bag of temp particles to transfer resampled particles
     std::vector<Particle> resampled_particles;
-    resampled_particles.clear();
 
     for(int i=0; i<num_particles; i++){
         int index = dd_index(gen);
@@ -255,7 +245,7 @@ void ParticleFilter::resample() {
     }
 
     // replace the original particles with survived particles
-    particles = resampled_particles;
+    particles = std::move(resampled_particles);
 
 //   // find the particles max weight
 //    double weight_norm{0};
